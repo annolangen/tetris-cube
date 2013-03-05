@@ -1,19 +1,37 @@
 package org.anno;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Collection;
 
 /**
+ * Computes all solutions for the Tetris cube puzzle. Pre-computes all placements for each piece represented as a 
+ * 64-bit long. Then explores all ways to pick a placement for each piece without intersecting. Tests intersection by
+ * looking for non-zero result of AND-ing the bit masks. Avoids generating duplicates by omitting rotations for the 
+ * first placed piece and duplicate placements that arise from the piece symmetries.
+ *
+ * Uses several representations: Corner Coordinates, Centered Coordinates, Index/Extent. In the Corner Coordinate 
+ * system the big, transparent puzzle enclosure is divided in 4 x 4 x 4 cubes with coordinate values 0-3 in three 
+ * dimensions. The pieces are defined by listing the corner coordinates of their constituent cubes. The Centered 
+ * Coordinate system identifies the center of cubes {-3, -1, 1, 3} of an 8 x 8 x 8 enclosure relative to the center of 
+ * the enclosure. This representation is suitable for computing rotations without floating point arithmetic. In the 
+ * Index representation each 4 x 4 x 4 cube is assigned a number in the range [0-63]. The Extent representation sets 
+ * a bit corresponding to an index. 
+ *
  * @author anno.langen@gmail.com (Anno Langen)
  */
 public class Tetris {
 
-  enum Color {
-
+  enum Color { 
     RED, BLUE, YELLOW
   }
 
+  /**
+   * A colored piece of the puzzle. Characterized by some initial position, which is expressed by enumerating the 
+   * Corner Coordinates of its constituent cubes. The bounding box of the initial position must include zero for all 
+   * three dimensions - the rotation is arbitrary.
+   */
   static class Piece {
 
     static final Piece[] ALL = {
@@ -31,7 +49,7 @@ public class Tetris {
         new Piece(Color.YELLOW, new int[][]{{0, 0, 1}, {1, 0, 1}, {2, 0, 1}, {1, 0, 2}, {1, 1, 1}, {1, 1, 0}})};
 
     final Color color;
-    final long initialPositions;
+    final long initialExtent;
 
     Piece(Color color, int[][] cubes) {
       long bits = 0;
@@ -39,14 +57,18 @@ public class Tetris {
         bits += (1L << indexFromVector(cube));
       }
       this.color = color;
-      initialPositions = bits;
+      initialExtent = bits;
     }
 
+    /**
+     * A specific placement of the parent piece. Occupies certain area of the 4 x 4 x 4 grid, which
+     * is encoded with bit value 1 in the a 64 bit long {@link #extent}.
+     */
     class Placement {
 
-      final long positions;
-      public Placement(long positions) {
-        this.positions = positions;
+      final long extent;
+      public Placement(long extent) {
+        this.extent = extent;
       }
 
       @Override
@@ -71,21 +93,34 @@ public class Tetris {
       }
 
       private void appendRow(StringBuilder buf, int start) {
-        buf.append((positions & (1L << start++)) != 0 ? 'X' : '_');
-        buf.append((positions & (1L << start++)) != 0 ? 'X' : '_');
-        buf.append((positions & (1L << start++)) != 0 ? 'X' : '_');
-        buf.append((positions & (1L << start)) != 0 ? 'X' : '_');
+        for (int i = start; i < start + 4; i++) {
+          buf.append((extent & (1L << i)) != 0 ? 'X' : '_');
+        }
       }
 
       public Piece getPiece() {
         return Piece.this;
       }
+
+      @Override
+      public boolean equals(Object o) {
+        return this == o
+            || o != null && getClass() == o.getClass() && extent == ((Placement) o).extent;
+      }
+
+      @Override
+      public int hashCode() {
+        return (int) (extent ^ (extent >>> 32));
+      }
     }
 
-    ArrayList<Placement> allShifts() {
-      int[] max = getBoundingBox(initialPositions);
-      ArrayList<Placement> result = new ArrayList<Placement>();
-      long xbits = initialPositions;
+    /**
+     * Returns all placements resulting from shifting the initial extent in all three dimensions.
+     */
+    Collection<Placement> allShifts() {
+      int[] max = getBoundingBox(initialExtent);
+      Collection<Placement> result = new ArrayList<Placement>();
+      long xbits = initialExtent;
       for (int xShift = 4 - max[0]; --xShift >= 0;) {
         long ybits = xbits;
         for (int y = 4 - max[1]; --y >= 0;) {
@@ -101,10 +136,10 @@ public class Tetris {
       return result;
     }
 
-    ArrayList<Placement> allPlacements() {
-      ArrayList<Placement> result = new ArrayList<Placement>();
+    Collection<Placement> allPlacements() {
+      Collection<Placement> result = new HashSet<Placement>();
       for (Placement placement : allShifts()) {
-        addAllRotations(placement.positions, result);
+        addAllRotations(placement.extent, result);
       }
       return result;
     }
@@ -116,14 +151,14 @@ public class Tetris {
       return result;
     }
 
-    private Placement newPlacement(long positions) {
-      return new Placement(positions);
+    private Placement newPlacement(long extent) {
+      return new Placement(extent);
     }
 
-    private static int[] getBoundingBox(long positions) {
+    private static int[] getBoundingBox(long extent) {
       int[] max = new int[3];
       for (int i = 64; --i >= 0; ) {
-        if ((positions & (1L << i)) != 0) {
+        if ((extent & (1L << i)) != 0) {
           int[] v = asVector(i);
           for (int d = 3; --d >= 0; ) {
             if (v[d] > max[d]) max[d] = v[d];
@@ -136,6 +171,9 @@ public class Tetris {
 
   static class Transform {
 
+    /**
+     * Permutation of the Index representation.
+     */
     final int[] map;
     static final Transform X = new Transform(shift(0));
     static final Transform Y = new Transform(shift(1));
@@ -153,10 +191,10 @@ public class Tetris {
       }
     }
 
-    public long apply(long placement) {
+    public long apply(long extent) {
       long result = 0;
       for (int i = 64; --i >= 0;) {
-        if ((placement & (1L << i)) != 0) {
+        if ((extent & (1L << i)) != 0) {
           result += (1L << map[i]);
         }
       }
@@ -207,13 +245,11 @@ public class Tetris {
   }
 
   /**
-   * Returns vector that is perpendicular to the given two vectors with the direction determined by the right-hand rule.
-   * See <a href='http://en.wikipedia.org/wiki/Cross_product'>Cross product</a> for more info.
+   * Returns the 2 x 3 x 2 x 2 = 24 possible three dimensional rotations. A rotation is characterized by a 3 x 3
+   * matrix, where the images of the first two unit vectors are unit vectors along one of the coordinate axes and the
+   * image of the third unit vector is determined by the cross product of the first two images. Note that the identity
+   * transform is included in the 24 rotations.
    */
-  static int[] crossProduct(int[] u, int[] v) {
-    return new int[]{u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]};
-  }
-
   private static Transform[] getAllRotations() {
     int[][] matrix = new int[3][];
 
@@ -230,19 +266,30 @@ public class Tetris {
     matrix[0][x] = sx;
     for (int y = 3; --y >= 0;) {
       if (x != y) {
-        addAllYZRotations(matrix, y, 1, transforms);
-        addAllYZRotations(matrix, y, -1, transforms);
+        transforms.add(getRotation(matrix, y, 1));
+        transforms.add(getRotation(matrix, y, -1));
       }
     }
   }
 
-  private static void addAllYZRotations(int[][] matrix, int y, int sy, List<Transform> transforms) {
+  private static Rotation getRotation(int[][] matrix, int y, int sy) {
     matrix[1] = new int[3];
     matrix[1][y] = sy;
     matrix[2] = crossProduct(matrix[0], matrix[1]);
-    transforms.add(new Rotation(matrix));
+    return new Rotation(matrix);
   }
 
+  /**
+   * Returns vector that is perpendicular to the given two vectors with the direction determined by the right-hand rule.
+   * See <a href='http://en.wikipedia.org/wiki/Cross_product'>Cross product</a> for more info.
+   */
+  static int[] crossProduct(int[] u, int[] v) {
+    return new int[]{u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]};
+  }
+
+  /**
+   * Returns an Index permutation corresponding to a unit shift along the given coordinate axis.
+   */
   static int[] shift(int index) {
     int[] result = new int[64];
     for (int i = 64; --i >= 0;) {
@@ -264,7 +311,7 @@ public class Tetris {
       int[] pieces = new int[64];
       for (int i = 0; i < placements.size(); i++) {
         Piece.Placement placement = placements.get(i);
-        long bits = placement.positions;
+        long bits = placement.extent;
         for (int j = 64; --j >= 0;) {
           if ((bits & (1L << j)) != 0) {
             pieces[j] = i;
@@ -292,25 +339,27 @@ public class Tetris {
   }
 
   public static void main(String[] args) {
-    List<List<Piece.Placement>> placementsList = new ArrayList<List<Piece.Placement>>();
-    placementsList.add(Piece.ALL[0].allShifts());
+    List<Piece.Placement[]> placementsList = new ArrayList<Piece.Placement[]>();
+    Collection<Piece.Placement> shifts = Piece.ALL[0].allShifts();
+    placementsList.add(shifts.toArray(new Piece.Placement[shifts.size()]));
     for (int i = 1; i < Piece.ALL.length; i++) {
-      placementsList.add(Piece.ALL[i].allPlacements());
+      Collection<Piece.Placement> placements = Piece.ALL[i].allPlacements();
+      placementsList.add(placements.toArray(new Piece.Placement[placements.size()]));
     }
     List<Solution> solutions = addAll(placementsList, new ArrayList<Piece.Placement>(), 0L, new ArrayList<Solution>());
     System.out.println(solutions);
   }
 
-  private static List<Solution> addAll(List<List<Piece.Placement>> placementsList, List<Piece.Placement> solution,
+  private static List<Solution> addAll(List<Piece.Placement[]> placementsList, List<Piece.Placement> solution,
       long bits, List<Solution> solutions) {
     int n = solution.size();
     if (n == placementsList.size()) {
       solutions.add(new Solution(solution));
     } else {
       for (Piece.Placement placement : placementsList.get(n)) {
-        if ((placement.positions & bits) == 0) {
+        if ((placement.extent & bits) == 0) {
           solution.add(placement);
-          addAll(placementsList, solution, bits | placement.positions, solutions);
+          addAll(placementsList, solution, bits | placement.extent, solutions);
           solution.remove(n);
         }
       }
