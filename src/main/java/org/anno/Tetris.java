@@ -6,30 +6,30 @@ import java.util.List;
 import java.util.Collection;
 
 /**
- * Computes all solutions for the Tetris cube puzzle. Pre-computes all placements for each piece represented as a 
+ * Computes all solutions for the Tetris cube puzzle. Pre-computes all placements for each piece represented as a
  * 64-bit long. Then explores all ways to pick a placement for each piece without intersecting. Tests intersection by
- * looking for non-zero result of AND-ing the bit masks. Avoids generating duplicates by omitting rotations for the 
+ * looking for non-zero result of AND-ing the bit masks. Avoids generating duplicates by omitting rotations for the
  * first placed piece and duplicate placements that arise from the piece symmetries.
  *
- * Uses several representations: Corner Coordinates, Centered Coordinates, Index/Extent. In the Corner Coordinate 
- * system the big, transparent puzzle enclosure is divided in 4 x 4 x 4 cubes with coordinate values 0-3 in three 
- * dimensions. The pieces are defined by listing the corner coordinates of their constituent cubes. The Centered 
- * Coordinate system identifies the center of cubes {-3, -1, 1, 3} of an 8 x 8 x 8 enclosure relative to the center of 
- * the enclosure. This representation is suitable for computing rotations without floating point arithmetic. In the 
- * Index representation each 4 x 4 x 4 cube is assigned a number in the range [0-63]. The Extent representation sets 
- * a bit corresponding to an index. 
+ * Uses several representations: Corner Coordinates, Centered Coordinates, Index/Extent. In the Corner Coordinate
+ * system the big, transparent puzzle enclosure is divided in 4 x 4 x 4 cubes with coordinate values 0-3 in three
+ * dimensions. The pieces are defined by listing the corner coordinates of their constituent cubes. The Centered
+ * Coordinate system identifies the center of cubes {-3, -1, 1, 3} of an 8 x 8 x 8 enclosure relative to the center of
+ * the enclosure. This representation is suitable for computing rotations without floating point arithmetic. In the
+ * Index representation each 4 x 4 x 4 cube is assigned a number in the range [0-63]. The Extent representation sets
+ * a bit corresponding to an index.
  *
  * @author anno.langen@gmail.com (Anno Langen)
  */
 public class Tetris {
 
-  enum Color { 
+  enum Color {
     RED, BLUE, YELLOW
   }
 
   /**
-   * A colored piece of the puzzle. Characterized by some initial position, which is expressed by enumerating the 
-   * Corner Coordinates of its constituent cubes. The bounding box of the initial position must include zero for all 
+   * A colored piece of the puzzle. Characterized by some initial position, which is expressed by enumerating the
+   * Corner Coordinates of its constituent cubes. The bounding box of the initial position must include zero for all
    * three dimensions - the rotation is arbitrary.
    */
   static class Piece {
@@ -119,7 +119,7 @@ public class Tetris {
      */
     Collection<Placement> allShifts() {
       int[] max = getBoundingBox(initialExtent);
-      Collection<Placement> result = new ArrayList<Placement>();
+      Collection<Placement> result = new ArrayList<>();
       long xbits = initialExtent;
       for (int xShift = 4 - max[0]; --xShift >= 0;) {
         long ybits = xbits;
@@ -137,7 +137,7 @@ public class Tetris {
     }
 
     Collection<Placement> allPlacements() {
-      Collection<Placement> result = new HashSet<Placement>();
+      Collection<Placement> result = new HashSet<>();
       for (Placement placement : allShifts()) {
         addAllRotations(placement.extent, result);
       }
@@ -253,7 +253,7 @@ public class Tetris {
   private static Transform[] getAllRotations() {
     int[][] matrix = new int[3][];
 
-    ArrayList<Transform> list = new ArrayList<Transform>(24);
+    ArrayList<Transform> list = new ArrayList<>(24);
     for (int i = 3; --i >= 0;) {
       addAllRotations(matrix, i, 1, list);
       addAllRotations(matrix, i, -1, list);
@@ -301,7 +301,7 @@ public class Tetris {
   }
 
   static class Solution {
-    final List<Piece.Placement> placements = new ArrayList<Piece.Placement>();
+    final List<Piece.Placement> placements = new ArrayList<>();
 
     public Solution(List<Piece.Placement> placements) {
       this.placements.addAll(placements);
@@ -339,14 +339,14 @@ public class Tetris {
   }
 
   public static void main(String[] args) {
-    List<Piece.Placement[]> placementsList = new ArrayList<Piece.Placement[]>();
+    List<Piece.Placement[]> placementsList = new ArrayList<>();
     Collection<Piece.Placement> shifts = Piece.ALL[0].allShifts();
     placementsList.add(shifts.toArray(new Piece.Placement[shifts.size()]));
     for (int i = 1; i < Piece.ALL.length; i++) {
       Collection<Piece.Placement> placements = Piece.ALL[i].allPlacements();
       placementsList.add(placements.toArray(new Piece.Placement[placements.size()]));
     }
-    List<Solution> solutions = addAll(placementsList, new ArrayList<Piece.Placement>(), 0L, new ArrayList<Solution>());
+    List<Solution> solutions = addAll(placementsList, new ArrayList<>(), 0L, new ArrayList<>());
     System.out.println(solutions);
   }
 
