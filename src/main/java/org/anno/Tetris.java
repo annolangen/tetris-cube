@@ -1,23 +1,28 @@
 package org.anno;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Collection;
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+import java.util.stream.Stream;
+import org.anno.Tetris.Piece.Placement;
 
 /**
- * Computes all solutions for the Tetris cube puzzle. Pre-computes all placements for each piece represented as a
- * 64-bit long. Then explores all ways to pick a placement for each piece without intersecting. Tests intersection by
- * looking for non-zero result of AND-ing the bit masks. Avoids generating duplicates by omitting rotations for the
- * first placed piece and duplicate placements that arise from the piece symmetries.
+ * Computes all solutions for the Tetris cube puzzle. Pre-computes all placements for each piece represented as a 64-bit
+ * long. Then explores all ways to pick a placement for each piece without intersecting. Tests intersection by looking
+ * for non-zero result of AND-ing the bit masks. Avoids generating duplicates by omitting rotations for the first placed
+ * piece and duplicate placements that arise from the piece symmetries.
  *
- * Uses several representations: Corner Coordinates, Centered Coordinates, Index/Extent. In the Corner Coordinate
- * system the big, transparent puzzle enclosure is divided in 4 x 4 x 4 cubes with coordinate values 0-3 in three
- * dimensions. The pieces are defined by listing the corner coordinates of their constituent cubes. The Centered
- * Coordinate system identifies the center of cubes {-3, -1, 1, 3} of an 8 x 8 x 8 enclosure relative to the center of
- * the enclosure. This representation is suitable for computing rotations without floating point arithmetic. In the
- * Index representation each 4 x 4 x 4 cube is assigned a number in the range [0-63]. The Extent representation sets
- * a bit corresponding to an index.
+ * Uses several representations: Corner Coordinates, Centered Coordinates, Index/Extent. In the Corner Coordinate system
+ * the big, transparent puzzle enclosure is divided in 4 x 4 x 4 cubes with coordinate values 0-3 in three dimensions.
+ * The pieces are defined by listing the corner coordinates of their constituent cubes. The Centered Coordinate system
+ * identifies the center of cubes {-3, -1, 1, 3} of an 8 x 8 x 8 enclosure relative to the center of the enclosure. This
+ * representation is suitable for computing rotations without floating point arithmetic. In the Index representation
+ * each 4 x 4 x 4 cube is assigned a number in the range [0-63]. The Extent representation sets a bit corresponding to
+ * an index.
  *
  * @author anno.langen@gmail.com (Anno Langen)
  */
@@ -28,9 +33,9 @@ public class Tetris {
   }
 
   /**
-   * A colored piece of the puzzle. Characterized by some initial position, which is expressed by enumerating the
-   * Corner Coordinates of its constituent cubes. The bounding box of the initial position must include zero for all
-   * three dimensions - the rotation is arbitrary.
+   * A colored piece of the puzzle. Characterized by some initial position, which is expressed by enumerating the Corner
+   * Coordinates of its constituent cubes. The bounding box of the initial position must include zero for all three
+   * dimensions - the rotation is arbitrary.
    */
   static class Piece {
 
@@ -61,12 +66,13 @@ public class Tetris {
     }
 
     /**
-     * A specific placement of the parent piece. Occupies certain area of the 4 x 4 x 4 grid, which
-     * is encoded with bit value 1 in the a 64 bit long {@link #extent}.
+     * A specific placement of the parent piece. Occupies certain area of the 4 x 4 x 4 grid, which is encoded with bit
+     * value 1 in the a 64 bit long {@link #extent}.
      */
     class Placement {
 
       final long extent;
+
       public Placement(long extent) {
         this.extent = extent;
       }
@@ -74,7 +80,7 @@ public class Tetris {
       @Override
       public String toString() {
         StringBuilder buf = new StringBuilder();
-        for (int y = 4; --y >= 0;) {
+        for (int y = 4; --y >= 0; ) {
           appendFourRowLine(buf, y);
         }
         return buf.toString();
@@ -121,11 +127,11 @@ public class Tetris {
       int[] max = getBoundingBox(initialExtent);
       Collection<Placement> result = new ArrayList<>();
       long xbits = initialExtent;
-      for (int xShift = 4 - max[0]; --xShift >= 0;) {
+      for (int xShift = 4 - max[0]; --xShift >= 0; ) {
         long ybits = xbits;
-        for (int y = 4 - max[1]; --y >= 0;) {
+        for (int y = 4 - max[1]; --y >= 0; ) {
           long zbits = ybits;
-          for (int z = 4 - max[2]; --z >= 0;) {
+          for (int z = 4 - max[2]; --z >= 0; ) {
             result.add(new Placement(zbits));
             zbits = Transform.Z.apply(zbits);
           }
@@ -161,7 +167,9 @@ public class Tetris {
         if ((extent & (1L << i)) != 0) {
           int[] v = asVector(i);
           for (int d = 3; --d >= 0; ) {
-            if (v[d] > max[d]) max[d] = v[d];
+            if (v[d] > max[d]) {
+              max[d] = v[d];
+            }
           }
         }
       }
@@ -186,14 +194,14 @@ public class Tetris {
 
     public Transform(int[][] matrix) {
       map = new int[64];
-      for (int i = 64; --i >= 0;) {
+      for (int i = 64; --i >= 0; ) {
         map[i] = indexFromCenteredVector(matrixApply(matrix, asCenteredVector(i)));
       }
     }
 
     public long apply(long extent) {
       long result = 0;
-      for (int i = 64; --i >= 0;) {
+      for (int i = 64; --i >= 0; ) {
         if ((extent & (1L << i)) != 0) {
           result += (1L << map[i]);
         }
@@ -209,7 +217,7 @@ public class Tetris {
     public Rotation(int[][] matrix) {
       super(matrix);
       this.matrix = new int[3][];
-      for (int i = 3; --i >=0;) {
+      for (int i = 3; --i >= 0; ) {
         this.matrix[i] = new int[3];
         System.arraycopy(matrix[i], 0, this.matrix[i], 0, 3);
       }
@@ -220,7 +228,7 @@ public class Tetris {
     return new int[]{dotProduct(m[0], v), dotProduct(m[1], v), dotProduct(m[2], v)};
   }
 
-  static int dotProduct(int[] u, int[] v) {
+  private static int dotProduct(int[] u, int[] v) {
     return u[0] * v[0] + u[1] * v[1] + u[2] * v[2];
   }
 
@@ -245,16 +253,16 @@ public class Tetris {
   }
 
   /**
-   * Returns the 2 x 3 x 2 x 2 = 24 possible three dimensional rotations. A rotation is characterized by a 3 x 3
-   * matrix, where the images of the first two unit vectors are unit vectors along one of the coordinate axes and the
-   * image of the third unit vector is determined by the cross product of the first two images. Note that the identity
-   * transform is included in the 24 rotations.
+   * Returns the 2 x 3 x 2 x 2 = 24 possible three dimensional rotations. A rotation is characterized by a 3 x 3 matrix,
+   * where the images of the first two unit vectors are unit vectors along one of the coordinate axes and the image of
+   * the third unit vector is determined by the cross product of the first two images. Note that the identity transform
+   * is included in the 24 rotations.
    */
   private static Transform[] getAllRotations() {
     int[][] matrix = new int[3][];
 
     ArrayList<Transform> list = new ArrayList<>(24);
-    for (int i = 3; --i >= 0;) {
+    for (int i = 3; --i >= 0; ) {
       addAllRotations(matrix, i, 1, list);
       addAllRotations(matrix, i, -1, list);
     }
@@ -264,7 +272,7 @@ public class Tetris {
   private static void addAllRotations(int[][] matrix, int x, int sx, List<Transform> transforms) {
     matrix[0] = new int[3];
     matrix[0][x] = sx;
-    for (int y = 3; --y >= 0;) {
+    for (int y = 3; --y >= 0; ) {
       if (x != y) {
         transforms.add(getRotation(matrix, y, 1));
         transforms.add(getRotation(matrix, y, -1));
@@ -283,7 +291,7 @@ public class Tetris {
    * Returns vector that is perpendicular to the given two vectors with the direction determined by the right-hand rule.
    * See <a href='http://en.wikipedia.org/wiki/Cross_product'>Cross product</a> for more info.
    */
-  static int[] crossProduct(int[] u, int[] v) {
+  private static int[] crossProduct(int[] u, int[] v) {
     return new int[]{u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]};
   }
 
@@ -292,7 +300,7 @@ public class Tetris {
    */
   static int[] shift(int index) {
     int[] result = new int[64];
-    for (int i = 64; --i >= 0;) {
+    for (int i = 64; --i >= 0; ) {
       int[] v = asVector(i);
       v[index] += 1;
       result[i] = indexFromVector(v) % 64;
@@ -300,70 +308,67 @@ public class Tetris {
     return result;
   }
 
-  static class Solution {
-    final List<Piece.Placement> placements = new ArrayList<>();
+  interface Solution { }
 
-    public Solution(List<Piece.Placement> placements) {
-      this.placements.addAll(placements);
-    }
-
-    int[] getPieces() {
-      int[] pieces = new int[64];
-      for (int i = 0; i < placements.size(); i++) {
-        Piece.Placement placement = placements.get(i);
-        long bits = placement.extent;
-        for (int j = 64; --j >= 0;) {
-          if ((bits & (1L << j)) != 0) {
-            pieces[j] = i;
+  private static Solution solution(Placement[] placements) {
+    return new Solution() {
+      int[] getPieces() {
+        int[] pieces = new int[64];
+        for (int i = 0; i < placements.length; i++) {
+          Piece.Placement placement = placements[i];
+          long bits = placement.extent;
+          for (int j = 64; --j >= 0; ) {
+            if ((bits & (1L << j)) != 0) {
+              pieces[j] = i;
+            }
           }
         }
+        return pieces;
       }
-      return pieces;
-    }
 
-    @Override
-    public String toString() {
-      StringBuilder buf = new StringBuilder();
-      int[] pieces = getPieces();
-      for (int y = 4; --y >=0;) {
-        buf.append('\n');
-        for (int z = 0; z < 4; z++) {
-          for (int x = 0; x < 4; x++) {
-            buf.append(pieces[indexFromVector(x,y,z)]);
+      @Override
+      public String toString() {
+        StringBuilder buf = new StringBuilder();
+        int[] pieces = getPieces();
+        for (int y = 4; --y >= 0; ) {
+          buf.append('\n');
+          for (int z = 0; z < 4; z++) {
+            for (int x = 0; x < 4; x++) {
+              buf.append(Integer.toHexString(pieces[indexFromVector(x, y, z)]));
+            }
+            buf.append(' ');
           }
-          buf.append(' ');
         }
+        return buf.toString();
       }
-      return buf.toString();
-    }
+    };
+  }
+
+  private static Supplier<Stream<Solution>> solutionsSupplier() {
+    List<Placement[]> placementsList = IntStream.range(0, Piece.ALL.length)
+        .mapToObj(i -> i == 0 ? Piece.ALL[0].allShifts() : Piece.ALL[i].allPlacements())
+        .map(p -> p.toArray(new Placement[0]))
+        .collect(Collectors.toList());
+    Placement[] explored = new Placement[Piece.ALL.length];
+    return new Supplier<Stream<Solution>>() {
+      @Override
+      public Stream<Solution> get() {
+        return placeRemaining(0, 0);
+      }
+
+      Stream<Solution> placeRemaining(long bits, int i) {
+        return i == placementsList.size() ? Stream.of(solution(explored.clone()))
+            : Stream.of(placementsList.get(i))
+                .filter(p -> ((p.extent & bits) == 0))
+                .flatMap(p -> {
+                  explored[i] = p;
+                  return placeRemaining(bits | p.extent, i + 1);
+                });
+      }
+    };
   }
 
   public static void main(String[] args) {
-    List<Piece.Placement[]> placementsList = new ArrayList<>();
-    Collection<Piece.Placement> shifts = Piece.ALL[0].allShifts();
-    placementsList.add(shifts.toArray(new Piece.Placement[shifts.size()]));
-    for (int i = 1; i < Piece.ALL.length; i++) {
-      Collection<Piece.Placement> placements = Piece.ALL[i].allPlacements();
-      placementsList.add(placements.toArray(new Piece.Placement[placements.size()]));
-    }
-    List<Solution> solutions = addAll(placementsList, new ArrayList<>(), 0L, new ArrayList<>());
-    System.out.println(solutions);
-  }
-
-  private static List<Solution> addAll(List<Piece.Placement[]> placementsList, List<Piece.Placement> solution,
-      long bits, List<Solution> solutions) {
-    int n = solution.size();
-    if (n == placementsList.size()) {
-      solutions.add(new Solution(solution));
-    } else {
-      for (Piece.Placement placement : placementsList.get(n)) {
-        if ((placement.extent & bits) == 0) {
-          solution.add(placement);
-          addAll(placementsList, solution, bits | placement.extent, solutions);
-          solution.remove(n);
-        }
-      }
-    }
-    return solutions;
+    solutionsSupplier().get().forEach(System.out::println);
   }
 }
